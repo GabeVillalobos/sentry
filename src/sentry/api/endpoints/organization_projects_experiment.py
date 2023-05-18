@@ -55,7 +55,6 @@ class OrganizationProjectsExperimentEndpoint(OrganizationEndpoint):
 
         if not serializer.is_valid():
             raise ValidationError(serializer.errors)
-
         if not request.user.is_authenticated:
             raise ValidationError(
                 {"detail": "You do not have permission to join a new team as a Team Admin"},
@@ -71,21 +70,21 @@ class OrganizationProjectsExperimentEndpoint(OrganizationEndpoint):
             )
 
         default_team_slug = f"default-team-{request.user.username}"
-        slug_copy = default_team_slug
+        suffixed_team_slug = default_team_slug
 
         # add suffix to default team name until name is available
         counter = 1
-        while Team.objects.filter(organization=organization, slug=slug_copy).exists():
-            slug_copy = f"{default_team_slug}-{counter}"
+        while Team.objects.filter(organization=organization, slug=suffixed_team_slug).exists():
+            suffixed_team_slug = f"{default_team_slug}-{counter}"
             counter += 1
-        default_team_slug = slug_copy
+        default_team_slug = suffixed_team_slug
 
         with transaction.atomic():
             try:
                 with transaction.atomic():
                     team = Team.objects.create(
-                        name=result.get("name") or result["slug"],
-                        slug=result.get("slug"),
+                        name=default_team_slug,
+                        slug=default_team_slug,
                         idp_provisioned=result.get("idp_provisioned", False),
                         organization=organization,
                         through_project_creation=True,
@@ -100,16 +99,17 @@ class OrganizationProjectsExperimentEndpoint(OrganizationEndpoint):
                     )
                     project = Project.objects.create(
                         name=result["name"],
+                        # slug is set to None to avoid a duplicate slug error
                         slug=None,
                         organization=organization,
                         platform=result.get("platform"),
                     )
             except (IntegrityError, MaxSnowflakeRetryError):
-                # We can only have a conflicting team slug and not a conflicting project slug
-                # because when we create the project, the project slug will be set based on
-                # the name. If the slug is taken then the model will automatically add a
-                # suffix to the project slug to make it unique. This is different from the
-                # added suffix to the team slug that we do above
+                # The system allows for duplicate team slugs, but not duplicate project slugs.
+                # When a project is created, the slug is generated based on the project name.
+                # If the generated slug is already in use, the system automatically adds a suffix
+                # to make it unique. This differs from the approach for team slugs, where we
+                # manually add a suffix to ensure uniqueness.
                 raise ConflictError(
                     {
                         "non_field_errors": [CONFLICTING_TEAM_SLUG_ERROR],
