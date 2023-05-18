@@ -5,10 +5,10 @@ from sentry.api.endpoints.internal.integration_proxy import InternalIntegrationP
 from sentry.api.endpoints.organization_events_facets_stats_performance import (
     OrganizationEventsFacetsStatsPerformanceEndpoint,
 )
+from sentry.api.endpoints.organization_events_starfish import OrganizationEventsStarfishEndpoint
 from sentry.api.endpoints.organization_projects_experiment import (
     OrganizationProjectsExperimentEndpoint,
 )
-from sentry.api.endpoints.organization_events_starfish import OrganizationEventsStarfishEndpoint
 from sentry.api.utils import method_dispatch
 from sentry.data_export.endpoints.data_export import DataExportEndpoint
 from sentry.data_export.endpoints.data_export_details import DataExportDetailsEndpoint
