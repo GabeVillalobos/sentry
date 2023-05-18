@@ -4,6 +4,7 @@ import moment from 'moment';
 
 import DatePageFilter from 'sentry/components/datePageFilter';
 import * as Layout from 'sentry/components/layouts/thirds';
+import {normalizeDateTimeParams} from 'sentry/components/organizations/pageFilters/parse';
 import TransactionNameSearchBar from 'sentry/components/performance/searchBar';
 import Switch from 'sentry/components/switchButton';
 import {t} from 'sentry/locale';
@@ -13,7 +14,7 @@ import {
   PageErrorAlert,
   PageErrorProvider,
 } from 'sentry/utils/performance/contexts/pageError';
-import {useQuery} from 'sentry/utils/queryClient';
+import {useApiQuery, useQuery} from 'sentry/utils/queryClient';
 import {MutableSearch} from 'sentry/utils/tokenizeSearch';
 import {useLocation} from 'sentry/utils/useLocation';
 import useOrganization from 'sentry/utils/useOrganization';
@@ -24,6 +25,7 @@ import {
 } from 'sentry/views/starfish/modules/databaseModule/queries';
 import combineTableDataWithSparklineData from 'sentry/views/starfish/utils/combineTableDataWithSparklineData';
 import {HOST} from 'sentry/views/starfish/utils/constants';
+import {datetimeToClickhouseFilterTimestamps} from 'sentry/views/starfish/utils/dates';
 
 import DatabaseChartView from './databaseChartView';
 import DatabaseTableView, {DataRow, MainTableSort} from './databaseTableView';
@@ -63,11 +65,37 @@ function DatabaseModule() {
     sortKey: sort.sortHeader?.key,
     sortDirection: sort.direction,
   });
-
   const pageFilters = usePageFilters();
 
+  const {selection} = pageFilters;
+  const {projects, environments, datetime} = selection;
+
+  useApiQuery<null>(
+    [
+      `/organizations/${organization.slug}/events-starfish/`,
+      {
+        query: {
+          ...{
+            environment: environments,
+            project: projects.map(proj => String(proj)),
+          },
+          ...normalizeDateTimeParams(datetime),
+        },
+      },
+    ],
+    {
+      staleTime: 10,
+    }
+  );
+
   const {data: dbAggregateData} = useQuery({
-    queryKey: ['dbAggregates', transaction, filterNew, filterOld],
+    queryKey: [
+      'dbAggregates',
+      transaction,
+      filterNew,
+      filterOld,
+      pageFilters.selection.datetime,
+    ],
     queryFn: () =>
       fetch(
         `${HOST}/?query=${getDbAggregatesQuery({
@@ -79,20 +107,17 @@ function DatabaseModule() {
     initialData: [],
   });
 
+  const {start_timestamp, end_timestamp} = datetimeToClickhouseFilterTimestamps(
+    pageFilters.selection.datetime
+  );
+
   const combinedDbData = combineTableDataWithSparklineData(
     tableData,
     dbAggregateData,
-    moment.duration(12, 'hours')
+    moment.duration(12, 'hours'),
+    moment(start_timestamp),
+    moment(end_timestamp)
   );
-
-  const aggregatesGroupedByQuery = {};
-  dbAggregateData.forEach(({description, interval, count, p75}) => {
-    if (description in aggregatesGroupedByQuery) {
-      aggregatesGroupedByQuery[description].push({name: interval, count, p75});
-    } else {
-      aggregatesGroupedByQuery[description] = [{name: interval, count, p75}];
-    }
-  });
 
   useEffect(() => {
     function handleKeyDown({keyCode}) {
@@ -214,6 +239,7 @@ function DatabaseModule() {
               nextRow={rows.next}
               prevRow={rows.prev}
               onClose={unsetSelectedSpanGroup}
+              transaction={transaction}
             />
           </Layout.Main>
         </Layout.Body>

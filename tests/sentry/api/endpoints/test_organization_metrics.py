@@ -9,7 +9,7 @@ from django.urls import reverse
 
 from sentry.models import ApiToken
 from sentry.sentry_metrics import indexer
-from sentry.sentry_metrics.configuration import UseCaseKey
+from sentry.sentry_metrics.use_case_id_registry import UseCaseID
 from sentry.snuba.metrics import TransactionStatusTagValue, TransactionTagsKey
 from sentry.snuba.metrics.fields import (
     DERIVED_METRICS,
@@ -47,12 +47,12 @@ def mocked_mri_resolver(metric_names, mri_func):
     return lambda x: x if x in metric_names else mri_func(x)
 
 
-def indexer_record(use_case_id: UseCaseKey, org_id: int, string: str) -> int:
+def indexer_record(use_case_id: UseCaseID, org_id: int, string: str) -> int:
     return indexer.record(use_case_id=use_case_id, org_id=org_id, string=string)
 
 
-perf_indexer_record = partial(indexer_record, UseCaseKey.PERFORMANCE)
-rh_indexer_record = partial(indexer_record, UseCaseKey.RELEASE_HEALTH)
+perf_indexer_record = partial(indexer_record, UseCaseID.TRANSACTIONS)
+rh_indexer_record = partial(indexer_record, UseCaseID.SESSIONS)
 
 
 @region_silo_test(stable=True)
@@ -288,6 +288,7 @@ class OrganizationMetricsIndexIntegrationTest(OrganizationMetricMetaIntegrationT
                     "project_id": self.transaction_proj.id,
                     "metric_id": tx_user_metric,
                     "timestamp": user_ts,
+                    "sentry_received_timestamp": user_ts + 10,
                     "tags": {
                         tx_satisfaction: perf_indexer_record(
                             self.organization.id, TransactionSatisfactionTagValue.FRUSTRATED.value
@@ -302,6 +303,7 @@ class OrganizationMetricsIndexIntegrationTest(OrganizationMetricMetaIntegrationT
                     "project_id": self.transaction_proj.id,
                     "metric_id": tx_user_metric,
                     "timestamp": user_ts,
+                    "sentry_received_timestamp": user_ts + 10,
                     "tags": {
                         tx_satisfaction: perf_indexer_record(
                             self.organization.id, TransactionSatisfactionTagValue.SATISFIED.value
@@ -324,6 +326,7 @@ class OrganizationMetricsIndexIntegrationTest(OrganizationMetricMetaIntegrationT
                     "project_id": self.transaction_proj.id,
                     "metric_id": tx_duration_metric,
                     "timestamp": user_ts,
+                    "sentry_received_timestamp": user_ts + 10,
                     "tags": {
                         tx_satisfaction: perf_indexer_record(
                             self.organization.id, TransactionSatisfactionTagValue.TOLERATED.value
@@ -341,6 +344,7 @@ class OrganizationMetricsIndexIntegrationTest(OrganizationMetricMetaIntegrationT
                     "project_id": self.transaction_proj.id,
                     "metric_id": tx_lcp_metric,
                     "timestamp": user_ts,
+                    "sentry_received_timestamp": user_ts + 10,
                     "tags": {
                         tx_satisfaction: perf_indexer_record(
                             self.organization.id, TransactionSatisfactionTagValue.SATISFIED.value
